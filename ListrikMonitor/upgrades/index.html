@@ -1,0 +1,1017 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>⚡ POWRMON — Monitor Listrik Rumah</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --panel: #111827;
+    --panel2: #1a2235;
+    --accent: #00e5ff;
+    --accent2: #ff6b35;
+    --warn: #ffcc00;
+    --danger: #ff3b3b;
+    --success: #00ff88;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --border: #1e2d45;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(ellipse at 30% 20%, rgba(0,229,255,0.05) 0%, transparent 50%),
+                radial-gradient(ellipse at 70% 80%, rgba(255,107,53,0.04) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  header {
+    position: relative;
+    z-index: 10;
+    padding: 2rem 2.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(17,24,39,0.8);
+    backdrop-filter: blur(10px);
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  .logo-icon {
+    width: 42px; height: 42px;
+    background: linear-gradient(135deg, var(--accent), #0066ff);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.3rem;
+    box-shadow: 0 0 20px rgba(0,229,255,0.3);
+  }
+  h1 { font-size: 1.4rem; font-weight: 800; letter-spacing: -0.5px; }
+  h1 span { color: var(--accent); }
+  .tarif-badge {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    background: rgba(0,229,255,0.1);
+    border: 1px solid rgba(0,229,255,0.3);
+    color: var(--accent);
+    padding: 0.4rem 0.9rem;
+    border-radius: 20px;
+  }
+
+  main {
+    position: relative;
+    z-index: 1;
+    max-width: 1300px;
+    margin: 0 auto;
+    padding: 2rem 2.5rem;
+  }
+
+  /* STATS ROW */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  .stat-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.3rem 1.5rem;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.2s;
+  }
+  .stat-card:hover { transform: translateY(-2px); }
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+  .stat-card.blue::before { background: linear-gradient(90deg, var(--accent), transparent); }
+  .stat-card.orange::before { background: linear-gradient(90deg, var(--accent2), transparent); }
+  .stat-card.yellow::before { background: linear-gradient(90deg, var(--warn), transparent); }
+  .stat-card.green::before { background: linear-gradient(90deg, var(--success), transparent); }
+  .stat-label {
+    font-size: 0.72rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 0.5rem;
+  }
+  .stat-value {
+    font-family: 'Space Mono', monospace;
+    font-size: 1.8rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .stat-value.blue { color: var(--accent); }
+  .stat-value.orange { color: var(--accent2); }
+  .stat-value.yellow { color: var(--warn); }
+  .stat-value.green { color: var(--success); }
+  .stat-sub { font-size: 0.75rem; color: var(--muted); margin-top: 0.3rem; }
+
+  /* ALERT BAR */
+  .alert-bar {
+    display: none;
+    align-items: center;
+    gap: 0.8rem;
+    background: rgba(255,59,59,0.12);
+    border: 1px solid rgba(255,59,59,0.4);
+    border-radius: 10px;
+    padding: 0.9rem 1.2rem;
+    margin-bottom: 1.5rem;
+    animation: pulse-border 1.5s infinite;
+    font-size: 0.9rem;
+  }
+  .alert-bar.show { display: flex; }
+  @keyframes pulse-border {
+    0%, 100% { border-color: rgba(255,59,59,0.4); }
+    50% { border-color: rgba(255,59,59,0.9); }
+  }
+  .alert-dot {
+    width: 10px; height: 10px;
+    background: var(--danger);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--danger);
+    animation: blink 1s infinite;
+    flex-shrink: 0;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  /* LAYOUT */
+  .content-grid {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  /* COLOKAN TABLE */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .panel-header {
+    padding: 1.2rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .panel-title {
+    font-size: 1rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .btn-add {
+    background: linear-gradient(135deg, var(--accent), #0099cc);
+    color: #000;
+    border: none;
+    padding: 0.5rem 1.1rem;
+    border-radius: 8px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.82rem;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+    display: flex; align-items: center; gap: 0.4rem;
+  }
+  .btn-add:hover { opacity: 0.9; transform: scale(1.02); }
+
+  .colokan-list { padding: 1rem; display: flex; flex-direction: column; gap: 0.7rem; }
+  .colokan-item {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1rem 1.2rem;
+    display: grid;
+    grid-template-columns: auto 1fr auto auto auto;
+    align-items: center;
+    gap: 1rem;
+    transition: border-color 0.2s;
+    animation: slideIn 0.3s ease;
+  }
+  @keyframes slideIn { from { opacity:0; transform: translateY(-10px); } to { opacity:1; transform:translateY(0); } }
+  .colokan-item.danger { border-color: rgba(255,59,59,0.5); }
+  .colokan-item.warning { border-color: rgba(255,204,0,0.5); }
+  .colokan-item.safe { border-color: rgba(0,255,136,0.2); }
+
+  .colokan-num {
+    width: 32px; height: 32px;
+    background: rgba(0,229,255,0.1);
+    border: 1px solid rgba(0,229,255,0.3);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--accent);
+  }
+  .colokan-info { flex: 1; }
+  .colokan-name {
+    font-weight: 600;
+    font-size: 0.9rem;
+    margin-bottom: 0.1rem;
+  }
+  .colokan-device { font-size: 0.75rem; color: var(--muted); }
+  
+  .colokan-watt {
+    text-align: right;
+  }
+  .watt-val {
+    font-family: 'Space Mono', monospace;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--accent2);
+  }
+  .watt-label { font-size: 0.68rem; color: var(--muted); }
+
+  .colokan-bar-wrap { 
+    width: 80px;
+  }
+  .colokan-bar {
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 0.2rem;
+  }
+  .colokan-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s, background 0.3s;
+  }
+  .bar-pct { font-size: 0.65rem; color: var(--muted); font-family: 'Space Mono', monospace; }
+
+  .btn-del {
+    background: rgba(255,59,59,0.1);
+    border: 1px solid rgba(255,59,59,0.3);
+    color: var(--danger);
+    border-radius: 6px;
+    padding: 0.3rem 0.5rem;
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: background 0.2s;
+  }
+  .btn-del:hover { background: rgba(255,59,59,0.25); }
+
+  .toggle-switch {
+    position: relative;
+    width: 40px; height: 22px;
+    cursor: pointer;
+  }
+  .toggle-switch input { display: none; }
+  .toggle-track {
+    position: absolute; inset: 0;
+    background: var(--border);
+    border-radius: 11px;
+    transition: background 0.3s;
+  }
+  .toggle-switch input:checked + .toggle-track { background: var(--success); }
+  .toggle-thumb {
+    position: absolute;
+    top: 3px; left: 3px;
+    width: 16px; height: 16px;
+    background: white;
+    border-radius: 50%;
+    transition: transform 0.3s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
+  .toggle-switch input:checked ~ .toggle-thumb { transform: translateX(18px); }
+
+  /* SIDEBAR */
+  .sidebar { display: flex; flex-direction: column; gap: 1.5rem; }
+
+  /* USAGE METER */
+  .meter-wrap { padding: 1.5rem; text-align: center; }
+  .meter-svg { width: 180px; height: 100px; margin: 0 auto 1rem; display: block; }
+  .meter-val {
+    font-family: 'Space Mono', monospace;
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .meter-label { font-size: 0.75rem; color: var(--muted); margin-top: 0.2rem; }
+  .meter-limit { font-size: 0.8rem; color: var(--muted); margin-top: 0.8rem; }
+  .meter-limit span { color: var(--text); font-weight: 600; }
+
+  /* CHART */
+  .chart-wrap { padding: 1.2rem; }
+  canvas { width: 100% !important; }
+
+  /* BIAYA */
+  .biaya-wrap { padding: 1.5rem; }
+  .biaya-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.85rem;
+  }
+  .biaya-row:last-child { border-bottom: none; }
+  .biaya-label { color: var(--muted); }
+  .biaya-val { font-family: 'Space Mono', monospace; font-weight: 700; color: var(--text); }
+  .biaya-total-val { color: var(--success); font-size: 1.1rem; }
+
+  /* MODAL */
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(4px);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 2rem;
+    width: 420px;
+    animation: modalIn 0.3s ease;
+  }
+  @keyframes modalIn { from { opacity:0; transform: scale(0.9) translateY(20px); } to { opacity:1; transform: scale(1) translateY(0); } }
+  .modal h3 { font-size: 1.2rem; font-weight: 800; margin-bottom: 1.5rem; }
+  .form-group { margin-bottom: 1.2rem; }
+  label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.5px; }
+  input[type=text], input[type=number], select {
+    width: 100%;
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 0.7rem 1rem;
+    border-radius: 8px;
+    font-family: 'Syne', sans-serif;
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  input:focus, select:focus { border-color: var(--accent); }
+  select option { background: var(--panel2); }
+  .modal-btns { display: flex; gap: 0.8rem; margin-top: 1.5rem; }
+  .btn-primary {
+    flex: 1;
+    background: linear-gradient(135deg, var(--accent), #0099cc);
+    color: #000;
+    border: none;
+    padding: 0.8rem;
+    border-radius: 8px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  .btn-primary:hover { opacity: 0.9; }
+  .btn-cancel {
+    flex: 1;
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    padding: 0.8rem;
+    border-radius: 8px;
+    font-family: 'Syne', sans-serif;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  .btn-cancel:hover { border-color: var(--text); color: var(--text); }
+
+  /* DAYA LIMIT INPUT */
+  .limit-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0 1.5rem 1.2rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 0;
+  }
+  .limit-row label { margin: 0; white-space: nowrap; font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .limit-row input { flex: 1; padding: 0.5rem 0.8rem; }
+
+  @media (max-width: 900px) {
+    .stats-grid { grid-template-columns: repeat(2,1fr); }
+    .content-grid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 500px) {
+    main { padding: 1rem; }
+    header { padding: 1rem; }
+    .stats-grid { grid-template-columns: 1fr 1fr; }
+  }
+
+  .colokan-micro {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin-top: 0.35rem;
+  }
+  .micro-tag {
+    font-size: 0.65rem;
+    font-family: 'Space Mono', monospace;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.1rem 0.4rem;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .micro-tag.cost { color: var(--warn); border-color: rgba(255,204,0,0.2); background: rgba(255,204,0,0.05); }
+  .micro-tag.cost-month { color: var(--success); border-color: rgba(0,255,136,0.2); background: rgba(0,255,136,0.05); }
+    text-align: center;
+    padding: 2.5rem 1rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+  .empty-state .icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">⚡</div>
+    <div>
+      <h1>Monitor <span>Listrik</span> Rumah</h1>
+      <div style="font-size:0.72rem;color:var(--muted);margin-top:0.1rem"><a href="javascript: history.go">Real-time Power Monitoring</a></div>
+    </div>
+  </div>
+  <a href="../index.html"><div class="tarif-badge">1300 VA · Rp 1.444/kWh</div></a>
+</header>
+
+<main>
+  <!-- STATS -->
+  <div class="stats-grid">
+    <div class="stat-card blue">
+      <div class="stat-label">Total Daya Aktif</div>
+      <div class="stat-value blue" id="stat-watt">0 W</div>
+      <div class="stat-sub" id="stat-watt-sub">0 colokan aktif</div>
+    </div>
+    <div class="stat-card orange">
+      <div class="stat-label">Perkiraan / Hari</div>
+      <div class="stat-value orange" id="stat-kwh-day">0.00 kWh</div>
+      <div class="stat-sub">× 24 jam</div>
+    </div>
+    <div class="stat-card yellow">
+      <div class="stat-label">Biaya / Hari</div>
+      <div class="stat-value yellow" id="stat-cost-day">Rp 0</div>
+      <div class="stat-sub">estimasi pemakaian</div>
+    </div>
+    <div class="stat-card green">
+      <div class="stat-label">Biaya / Bulan</div>
+      <div class="stat-value green" id="stat-cost-month">Rp 0</div>
+      <div class="stat-sub">30 hari</div>
+    </div>
+  </div>
+
+  <!-- ALERT -->
+  <div class="alert-bar" id="alert-bar">
+    <div class="alert-dot"></div>
+    <span id="alert-msg">⚠️ Beban listrik melebihi batas aman!</span>
+  </div>
+
+  <div class="content-grid">
+    <!-- LEFT: Colokan List -->
+    <div>
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">🔌 Daftar Colokan</div>
+          <button class="btn-add" onclick="openModal()">＋ Tambah Colokan</button>
+        </div>
+        <div class="limit-row">
+          <label>Batas Daya (W):</label>
+          <input type="number" id="daya-limit" value="1300" min="100" max="10000" onchange="recalc()" style="max-width:120px;">
+        </div>
+        <div class="colokan-list" id="colokan-list">
+          <div class="empty-state">
+            <div class="icon">🔌</div>
+            <div>Belum ada colokan. Tambahkan yang pertama!</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Sidebar -->
+    <div class="sidebar">
+      <!-- Meter -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">📊 Beban Sistem</div>
+        </div>
+        <div class="meter-wrap">
+          <svg class="meter-svg" viewBox="0 0 200 110">
+            <defs>
+              <linearGradient id="meterGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#00ff88"/>
+                <stop offset="60%" stop-color="#ffcc00"/>
+                <stop offset="100%" stop-color="#ff3b3b"/>
+              </linearGradient>
+            </defs>
+            <!-- track -->
+            <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#1e2d45" stroke-width="16" stroke-linecap="round"/>
+            <!-- fill -->
+            <path id="meter-arc" d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="url(#meterGrad)" stroke-width="16" stroke-linecap="round"
+              stroke-dasharray="251.2" stroke-dashoffset="251.2" style="transition: stroke-dashoffset 0.8s cubic-bezier(.4,2,.6,1)"/>
+            <!-- needle -->
+            <circle id="meter-needle" cx="20" cy="100" r="6" fill="var(--accent)" style="transition: all 0.8s cubic-bezier(.4,2,.6,1)"/>
+          </svg>
+          <div class="meter-val" id="meter-pct">0%</div>
+          <div class="meter-label">dari kapasitas daya</div>
+          <div class="meter-limit">Limit: <span id="meter-limit-txt">1300 W</span></div>
+        </div>
+      </div>
+
+      <!-- Chart -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">📈 Distribusi per Colokan</div>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="pieChart" height="200"></canvas>
+          <div id="chart-empty" style="text-align:center;color:var(--muted);padding:1rem;font-size:0.85rem;">
+            Tambahkan colokan untuk melihat grafik
+          </div>
+        </div>
+      </div>
+
+      <!-- Biaya -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">💰 Estimasi Biaya</div>
+        </div>
+        <div class="biaya-wrap">
+          <div class="biaya-row">
+            <span class="biaya-label">Tarif PLN</span>
+            <span class="biaya-val">Rp 1.444/kWh</span>
+          </div>
+          <div class="biaya-row">
+            <span class="biaya-label">Daya saat ini</span>
+            <span class="biaya-val" id="b-watt">0 W</span>
+          </div>
+          <div class="biaya-row">
+            <span class="biaya-label">Per jam</span>
+            <span class="biaya-val" id="b-hour">Rp 0</span>
+          </div>
+          <div class="biaya-row">
+            <span class="biaya-label">Per hari (24 jam)</span>
+            <span class="biaya-val" id="b-day">Rp 0</span>
+          </div>
+          <div class="biaya-row">
+            <span class="biaya-label" style="font-weight:700;color:var(--text)">Per bulan</span>
+            <span class="biaya-val biaya-total-val" id="b-month">Rp 0</span>
+          </div>
+          <div class="biaya-row">
+            <span class="biaya-label">Total kWh/bulan</span>
+            <span class="biaya-val" id="b-kwh-month" style="color:var(--accent)">0 kWh</span>
+          </div>
+          <div id="b-boros-row" class="biaya-row" style="display:none">
+            <span class="biaya-label">⚡ Paling boros</span>
+            <span class="biaya-val" id="b-boros" style="color:var(--accent2);font-size:0.78rem;"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h3>➕ Tambah Colokan</h3>
+    <div class="form-group">
+      <label>Nama Colokan / Lokasi</label>
+      <input type="text" id="f-name" placeholder="cth: Kamar Tidur, Ruang Tamu...">
+    </div>
+    <div class="form-group">
+      <label>Perangkat Terhubung</label>
+      <input type="text" id="f-device" placeholder="cth: TV, AC, Kulkas...">
+    </div>
+    <div class="form-group">
+      <label>Daya Perangkat (Watt)</label>
+      <input type="number" id="f-watt" placeholder="cth: 150" min="1" max="10000">
+    </div>
+    <div class="form-group">
+      <label>Atau pilih preset perangkat</label>
+      <select id="f-preset" onchange="applyPreset()">
+        <option value="">-- Pilih Kategori & Perangkat --</option>
+
+        <optgroup label="💡 Pencahayaan">
+          <option value="3|Lampu LED Kecil">Lampu LED Kecil (3W)</option>
+          <option value="5|Lampu LED Standard">Lampu LED Standard (5W)</option>
+          <option value="9|Lampu LED Besar">Lampu LED Besar (9W)</option>
+          <option value="20|Lampu TL/Neon">Lampu TL/Neon (20W)</option>
+          <option value="40|Lampu Halogen">Lampu Halogen (40W)</option>
+        </optgroup>
+
+        <optgroup label="🖥️ Monitor LED Komputer">
+          <option value="30|Monitor LED 27 inch">Monitor LED 27" (30W)</option>
+          <option value="38|Monitor LED 32 inch">Monitor LED 32" (38W)</option>
+          <option value="50|Monitor LED 34 inch Ultrawide">Monitor LED 34" Ultrawide (50W)</option>
+          <option value="65|Monitor LED 38 inch Ultrawide">Monitor LED 38" Ultrawide (65W)</option>
+          <option value="80|Monitor LED 43 inch">Monitor LED 43" (80W)</option>
+          <option value="100|Monitor LED 49 inch Super Ultrawide">Monitor LED 49" Super Ultrawide (100W)</option>
+          <option value="120|Monitor LED 52 inch">Monitor LED 52" (120W)</option>
+        </optgroup>
+
+        <optgroup label="💻 Laptop & Aksesori">
+          <option value="45|Laptop 13-14 inch">Laptop 13–14" (45W)</option>
+          <option value="65|Laptop 15 inch">Laptop 15" (65W)</option>
+          <option value="90|Laptop 16-17 inch Gaming">Laptop 16–17" Gaming (90W)</option>
+          <option value="180|Laptop Gaming High-End">Laptop Gaming High-End (180W)</option>
+          <option value="10|Cooling Pad Laptop (USB powered)">Cooling Pad Laptop USB (10W)</option>
+          <option value="15|Cooling Pad Laptop Dual Fan">Cooling Pad Laptop Dual Fan (15W)</option>
+          <option value="20|Cooling Pad Laptop High Performance">Cooling Pad Laptop High Performance (20W)</option>
+        </optgroup>
+
+        <optgroup label="💾 Storage Eksternal">
+          <option value="2|External HDD 2.5 inch (USB powered)">External HDD 2.5" USB (2W)</option>
+          <option value="4|External HDD 2.5 inch aktif">External HDD 2.5" aktif (4W)</option>
+          <option value="6|External HDD 3.5 inch standby">External HDD 3.5" standby (6W)</option>
+          <option value="10|External HDD 3.5 inch aktif">External HDD 3.5" aktif baca/tulis (10W)</option>
+          <option value="15|External HDD 3.5 inch dengan adaptor">External HDD 3.5" + adaptor (15W)</option>
+        </optgroup>
+
+        <optgroup label="📱 Fast Charging Handphone">
+          <option value="18|Fast Charging HP baterai 4000mAh (18W)">Fast Charging HP 4000mAh — 18W</option>
+          <option value="25|Fast Charging HP baterai 4000mAh (25W)">Fast Charging HP 4000mAh — 25W</option>
+          <option value="33|Fast Charging HP baterai 5000mAh (33W)">Fast Charging HP 5000mAh — 33W</option>
+          <option value="45|Fast Charging HP baterai 5000mAh (45W)">Fast Charging HP 5000mAh — 45W</option>
+          <option value="65|Fast Charging HP baterai 6000mAh (65W)">Fast Charging HP 6000mAh — 65W</option>
+          <option value="67|Fast Charging HP baterai 6000mAh (67W)">Fast Charging HP 6000mAh — 67W</option>
+          <option value="80|Fast Charging HP baterai 7000mAh (80W)">Fast Charging HP 7000mAh — 80W</option>
+          <option value="100|Fast Charging HP baterai 8000mAh (100W)">Fast Charging HP 8000mAh — 100W</option>
+          <option value="120|Fast Charging HP baterai 8000mAh (120W)">Fast Charging HP 8000mAh — 120W</option>
+        </optgroup>
+
+        <optgroup label="🖥️ Komputer & Elektronik">
+          <option value="250|PC Desktop Mid-Range">PC Desktop Mid-Range (250W)</option>
+          <option value="400|PC Desktop Gaming">PC Desktop Gaming (400W)</option>
+          <option value="650|PC Desktop High-End Gaming">PC Desktop High-End (650W)</option>
+          <option value="15|Router WiFi">Router WiFi (15W)</option>
+          <option value="25|Modem ONT Fiber">Modem ONT Fiber (25W)</option>
+          <option value="30|Smart TV 32 inch">Smart TV 32" (30W)</option>
+          <option value="75|Smart TV 43 inch">Smart TV 43" (75W)</option>
+          <option value="120|Smart TV 55 inch">Smart TV 55" (120W)</option>
+          <option value="150|Smart TV 65 inch">Smart TV 65" (150W)</option>
+          <option value="10|Decoder STB">Decoder/STB (10W)</option>
+          <option value="30|Game Console PS4/Xbox">Game Console PS4/Xbox (30–100W) avg (65W)</option>
+          <option value="200|Game Console PS5">Game Console PS5 (200W)</option>
+        </optgroup>
+
+        <optgroup label="❄️ Pendingin & Pemanas">
+          <option value="15|Kipas Angin Kecil">Kipas Angin Kecil (15W)</option>
+          <option value="35|Kipas Angin Stand">Kipas Angin Stand (35W)</option>
+          <option value="55|Kipas Angin Tower">Kipas Angin Tower (55W)</option>
+          <option value="350|AC 0.5 PK">AC 0.5 PK (350W)</option>
+          <option value="650|AC 1 PK">AC 1 PK (650W)</option>
+          <option value="900|AC 1.5 PK">AC 1.5 PK (900W)</option>
+          <option value="1200|AC 2 PK">AC 2 PK (1200W)</option>
+          <option value="100|Kulkas 1 Pintu">Kulkas 1 Pintu (100W)</option>
+          <option value="150|Kulkas 2 Pintu">Kulkas 2 Pintu (150W)</option>
+        </optgroup>
+
+        <optgroup label="🍳 Dapur & Rumah Tangga">
+          <option value="800|Rice Cooker">Rice Cooker (800W)</option>
+          <option value="350|Mesin Cuci">Mesin Cuci (350W)</option>
+          <option value="1200|Setrika">Setrika (1200W)</option>
+          <option value="200|Dispenser">Dispenser (200W)</option>
+          <option value="1000|Pompa Air">Pompa Air (1000W)</option>
+          <option value="1200|Water Heater">Water Heater (1200W)</option>
+          <option value="1000|Microwave">Microwave (1000W)</option>
+          <option value="900|Blender">Blender (900W)</option>
+        </optgroup>
+      </select>
+    </div>
+    <div id="preset-info" style="display:none;background:rgba(0,229,255,0.07);border:1px solid rgba(0,229,255,0.2);border-radius:8px;padding:0.7rem 0.9rem;font-size:0.8rem;color:var(--accent);margin-top:-0.5rem;"></div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal()">Batal</button>
+      <button class="btn-primary" onclick="addColokan()">Tambah</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const TARIF = 1444; // Rp/kWh
+const PALETTE = ['#00e5ff','#ff6b35','#00ff88','#ffcc00','#a78bfa','#fb7185','#34d399','#fbbf24','#60a5fa','#f472b6'];
+
+let colokanList = JSON.parse(localStorage.getItem('colokan') || '[]');
+let chartInstance = null;
+
+function save() { localStorage.setItem('colokan', JSON.stringify(colokanList)); }
+
+function openModal() { document.getElementById('modal').classList.add('show'); document.getElementById('f-name').focus(); }
+function closeModal() {
+  document.getElementById('modal').classList.remove('show');
+  document.getElementById('f-name').value = '';
+  document.getElementById('f-device').value = '';
+  document.getElementById('f-watt').value = '';
+  document.getElementById('f-preset').value = '';
+}
+const PRESET_INFO = {
+  'Monitor LED 27 inch': 'Panel IPS/VA tipis, konsumsi daya rendah. Cocok untuk produktivitas dan gaming entry-level.',
+  'Monitor LED 32 inch': 'Ukuran populer untuk kantor dan gaming. Konsumsi sekitar 35–45W tergantung kecerahan.',
+  'Monitor LED 34 inch Ultrawide': 'Format 21:9, cocok multitasking. Daya lebih besar karena panel lebih lebar.',
+  'Monitor LED 38 inch Ultrawide': 'Ultrawide besar, panel IPS curved. Umum dipakai desainer & trader.',
+  'Monitor LED 43 inch': 'Monitor besar setara mini-TV. Digunakan workstation & home studio.',
+  'Monitor LED 49 inch Super Ultrawide': 'Setara dua monitor 27" side-by-side. Konsumsi daya cukup besar.',
+  'Monitor LED 52 inch': 'Monitor profesional/commercial display. Konsumsi daya tertinggi di kelas monitor.',
+  'Cooling Pad Laptop (USB powered)': 'Ditenagai USB dari laptop. Tidak butuh colokan listrik tersendiri.',
+  'Cooling Pad Laptop Dual Fan': 'Dua kipas besar. Beberapa model butuh adaptor terpisah via USB hub.',
+  'Cooling Pad Laptop High Performance': 'Lebih dari 2 kipas besar atau RPM tinggi. Disarankan pakai colokan sendiri.',
+  'External HDD 2.5 inch (USB powered)': 'Bus-powered via USB, tidak perlu adaptor. Konsumsi sangat rendah ~2W.',
+  'External HDD 2.5 inch aktif': 'Saat transfer data besar, konsumsi bisa naik hingga 4–5W.',
+  'External HDD 3.5 inch standby': '3.5 inch BUTUH adaptor daya sendiri. Standby sekitar 5–7W.',
+  'External HDD 3.5 inch aktif': 'Saat baca/tulis aktif bisa mencapai 8–12W. Selalu pakai adaptor bawaan.',
+  'External HDD 3.5 inch dengan adaptor': 'Total daya termasuk rugi konversi dari adaptor (~15–20% overhead).',
+  'Fast Charging HP baterai 4000mAh (18W)': 'Kapasitas 4000mAh, charger 18W Quick Charge. Pengisian penuh ~70 menit.',
+  'Fast Charging HP baterai 4000mAh (25W)': 'Kapasitas 4000mAh, charger 25W. Standar HP mid-range modern, ~55 menit.',
+  'Fast Charging HP baterai 5000mAh (33W)': 'Kapasitas 5000mAh, charger 33W. Umum di Xiaomi, Realme. ~65 menit.',
+  'Fast Charging HP baterai 5000mAh (45W)': 'Kapasitas 5000mAh, charger 45W. Samsung, Vivo flagship. ~50 menit.',
+  'Fast Charging HP baterai 6000mAh (65W)': 'Kapasitas 6000mAh, charger 65W. Xiaomi/Redmi flagship. ~60 menit.',
+  'Fast Charging HP baterai 6000mAh (67W)': 'Kapasitas 6000mAh, charger 67W. POCO, Redmi Note Pro. Sangat cepat.',
+  'Fast Charging HP baterai 7000mAh (80W)': 'Kapasitas 7000mAh, charger 80W. Realme GT, iQOO series. ~65 menit.',
+  'Fast Charging HP baterai 8000mAh (100W)': 'Kapasitas 8000mAh, charger 100W. Xiaomi HyperCharge. ~60 menit.',
+  'Fast Charging HP baterai 8000mAh (120W)': 'Kapasitas 8000mAh, charger 120W. Teknologi pengisian tercepat saat ini. ~50 menit.',
+};
+
+function applyPreset() {
+  const raw = document.getElementById('f-preset').value;
+  const infoEl = document.getElementById('preset-info');
+  if (!raw) { infoEl.style.display = 'none'; return; }
+  const pipeIdx = raw.indexOf('|');
+  const watt = raw.substring(0, pipeIdx);
+  const name = raw.substring(pipeIdx + 1);
+  document.getElementById('f-watt').value = watt;
+  if (!document.getElementById('f-device').value) {
+    document.getElementById('f-device').value = name;
+  }
+  const info = PRESET_INFO[name];
+  if (info) {
+    infoEl.textContent = 'ℹ️ ' + info;
+    infoEl.style.display = 'block';
+  } else {
+    infoEl.style.display = 'none';
+  }
+}
+
+function addColokan() {
+  const name = document.getElementById('f-name').value.trim();
+  const device = document.getElementById('f-device').value.trim();
+  const watt = parseFloat(document.getElementById('f-watt').value);
+  if (!name) { alert('Nama colokan harus diisi!'); return; }
+  if (!watt || watt <= 0) { alert('Daya harus diisi dengan benar!'); return; }
+  colokanList.push({ id: Date.now(), name, device: device || '-', watt, on: true });
+  save();
+  render();
+  recalc();
+  closeModal();
+}
+
+function removeColokan(id) {
+  colokanList = colokanList.filter(c => c.id !== id);
+  save(); render(); recalc();
+}
+
+function toggleColokan(id) {
+  const c = colokanList.find(c => c.id === id);
+  if (c) { c.on = !c.on; save(); recalc(); updateWattDisplay(id); }
+}
+
+function updateWattDisplay(id) {
+  const c = colokanList.find(c => c.id === id);
+  if (!c) return;
+  const el = document.getElementById('watt-' + id);
+  if (el) el.style.opacity = c.on ? '1' : '0.4';
+}
+
+function getActiveWatt() {
+  return colokanList.reduce((s, c) => s + (c.on ? c.watt : 0), 0);
+}
+
+function recalc() {
+  const totalW = getActiveWatt();
+  const limit = parseFloat(document.getElementById('daya-limit').value) || 1300;
+  const pct = Math.min((totalW / limit) * 100, 100);
+
+  // Stats
+  const activeCount = colokanList.filter(c => c.on).length;
+  document.getElementById('stat-watt').textContent = totalW.toFixed(0) + ' W';
+  document.getElementById('stat-watt-sub').textContent = activeCount + ' colokan aktif';
+
+  const kwhDay = (totalW / 1000) * 24;
+  document.getElementById('stat-kwh-day').textContent = kwhDay.toFixed(2) + ' kWh';
+  const costDay = kwhDay * TARIF;
+  document.getElementById('stat-cost-day').textContent = 'Rp ' + Math.round(costDay).toLocaleString('id');
+  document.getElementById('stat-cost-month').textContent = 'Rp ' + Math.round(costDay * 30).toLocaleString('id');
+
+  // Meter arc
+  const arcLen = 251.2;
+  const offset = arcLen - (arcLen * pct / 100);
+  document.getElementById('meter-arc').style.strokeDashoffset = offset;
+  document.getElementById('meter-pct').textContent = pct.toFixed(1) + '%';
+  document.getElementById('meter-pct').style.color = pct >= 90 ? 'var(--danger)' : pct >= 70 ? 'var(--warn)' : 'var(--accent)';
+  document.getElementById('meter-limit-txt').textContent = limit.toLocaleString('id') + ' W';
+
+  // Needle: moves along arc from left (20,100) to right (180,100), semicircle
+  const angle = -180 + (pct / 100) * 180; // degrees from left
+  const rad = (angle * Math.PI) / 180;
+  const cx = 100 + 80 * Math.cos(rad);
+  const cy = 100 + 80 * Math.sin(rad);
+  document.getElementById('meter-needle').setAttribute('cx', cx);
+  document.getElementById('meter-needle').setAttribute('cy', cy);
+  document.getElementById('meter-needle').setAttribute('fill', pct >= 90 ? 'var(--danger)' : pct >= 70 ? 'var(--warn)' : 'var(--success)');
+
+  // Alert
+  const alertBar = document.getElementById('alert-bar');
+  if (totalW > limit) {
+    alertBar.classList.add('show');
+    document.getElementById('alert-msg').textContent = `⚠️ Daya aktif (${totalW.toFixed(0)} W) melebihi batas (${limit.toLocaleString('id')} W)! Matikan beberapa perangkat.`;
+  } else if (pct >= 80) {
+    alertBar.classList.add('show');
+    document.getElementById('alert-msg').textContent = `⚠️ Beban listrik sudah mencapai ${pct.toFixed(0)}% dari kapasitas. Berhati-hatilah!`;
+  } else {
+    alertBar.classList.remove('show');
+  }
+
+  // Biaya panel
+  document.getElementById('b-watt').textContent = totalW.toFixed(0) + ' W';
+  document.getElementById('b-hour').textContent = 'Rp ' + Math.round((totalW / 1000) * TARIF).toLocaleString('id');
+  document.getElementById('b-day').textContent = 'Rp ' + Math.round(kwhDay * TARIF).toLocaleString('id');
+  document.getElementById('b-month').textContent = 'Rp ' + Math.round(kwhDay * TARIF * 30).toLocaleString('id');
+  document.getElementById('b-kwh-month').textContent = (kwhDay * 30).toFixed(1) + ' kWh';
+
+  // Paling boros
+  const activeItems = colokanList.filter(c => c.on);
+  if (activeItems.length > 0) {
+    const boros = activeItems.reduce((a, b) => a.watt > b.watt ? a : b);
+    document.getElementById('b-boros').textContent = boros.name + ' (' + boros.watt + 'W)';
+    document.getElementById('b-boros-row').style.display = 'flex';
+  } else {
+    document.getElementById('b-boros-row').style.display = 'none';
+  }
+
+  // Update bar fills
+  colokanList.forEach(c => {
+    const fill = document.getElementById('bar-' + c.id);
+    const pctEl = document.getElementById('pct-' + c.id);
+    if (!fill) return;
+    const p = totalW > 0 ? (c.on ? c.watt / totalW * 100 : 0) : 0;
+    fill.style.width = p + '%';
+    fill.style.background = p > 40 ? 'var(--danger)' : p > 25 ? 'var(--warn)' : 'var(--success)';
+    if (pctEl) pctEl.textContent = p.toFixed(1) + '%';
+  });
+
+  updateChart();
+}
+
+function render() {
+  const list = document.getElementById('colokan-list');
+  if (colokanList.length === 0) {
+    list.innerHTML = '<div class="empty-state"><div class="icon">🔌</div><div>Belum ada colokan. Tambahkan yang pertama!</div></div>';
+    return;
+  }
+  list.innerHTML = colokanList.map((c, i) => {
+    const kwhDay = (c.watt / 1000) * 24;
+    const costDay = Math.round(kwhDay * TARIF);
+    const costMonth = Math.round(kwhDay * TARIF * 30);
+    return `
+    <div class="colokan-item" id="item-${c.id}" style="${!c.on ? 'opacity:0.5' : ''}">
+      <div class="colokan-num">${String(i+1).padStart(2,'0')}</div>
+      <div class="colokan-info">
+        <div class="colokan-name">${esc(c.name)}</div>
+        <div class="colokan-device">${esc(c.device)}</div>
+        <div class="colokan-micro">
+          <span class="micro-tag">${kwhDay.toFixed(2)} kWh/hari</span>
+          <span class="micro-tag cost">~Rp ${costDay.toLocaleString('id')}/hari</span>
+          <span class="micro-tag cost-month">~Rp ${costMonth.toLocaleString('id')}/bln</span>
+        </div>
+      </div>
+      <div class="colokan-watt" id="watt-${c.id}">
+        <div class="watt-val">${c.watt} W</div>
+        <div class="watt-label">daya</div>
+      </div>
+      <div class="colokan-bar-wrap">
+        <div class="colokan-bar"><div class="colokan-bar-fill" id="bar-${c.id}" style="width:0%"></div></div>
+        <div class="bar-pct" id="pct-${c.id}">0%</div>
+      </div>
+      <label class="toggle-switch" title="Nyala/Mati">
+        <input type="checkbox" ${c.on ? 'checked' : ''} onchange="toggleColokan(${c.id})">
+        <div class="toggle-track"></div>
+        <div class="toggle-thumb"></div>
+      </label>
+      <button class="btn-del" onclick="removeColokan(${c.id})" title="Hapus">✕</button>
+    </div>
+  `}).join('');
+}
+
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function updateChart() {
+  const active = colokanList.filter(c => c.on && c.watt > 0);
+  const chartEmpty = document.getElementById('chart-empty');
+  const canvas = document.getElementById('pieChart');
+
+  if (active.length === 0) {
+    chartEmpty.style.display = 'block';
+    canvas.style.display = 'none';
+    if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+    return;
+  }
+  chartEmpty.style.display = 'none';
+  canvas.style.display = 'block';
+
+  const labels = active.map(c => c.name);
+  const data = active.map(c => c.watt);
+  const colors = active.map((_, i) => PALETTE[i % PALETTE.length]);
+
+  if (chartInstance) {
+    chartInstance.data.labels = labels;
+    chartInstance.data.datasets[0].data = data;
+    chartInstance.data.datasets[0].backgroundColor = colors;
+    chartInstance.update();
+    return;
+  }
+
+  chartInstance = new Chart(canvas, {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        backgroundColor: colors,
+        borderColor: '#0a0e1a',
+        borderWidth: 3,
+        hoverBorderWidth: 5
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            color: '#94a3b8',
+            font: { family: 'Syne', size: 11 },
+            padding: 12,
+            boxWidth: 12,
+            boxHeight: 12
+          }
+        },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.label}: ${ctx.raw} W (${ctx.parsed.toFixed(0)})`
+          }
+        }
+      },
+      cutout: '65%',
+      animation: { animateScale: true, animateRotate: true }
+    }
+  });
+}
+
+// Init
+render();
+recalc();
+
+// Update limit realtime
+document.getElementById('daya-limit').addEventListener('input', recalc);
+
+// Close modal on overlay click
+document.getElementById('modal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+// Enter key in modal
+document.getElementById('modal').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') addColokan();
+  if (e.key === 'Escape') closeModal();
+});
+</script>
+</body>
+</html>
